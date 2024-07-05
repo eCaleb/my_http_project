@@ -1,0 +1,55 @@
+{
+  "project_info": {
+    "project_number": "610052229774",
+    "firebase_url": "https://smart-home-automation-a052e-default-rtdb.firebaseio.com",
+    "project_id": "smart-home-automation-a052e",
+    "storage_bucket": "smart-home-automation-a052e.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:610052229774:android:990862fcb7e1c2de5bd7df",
+        "android_client_info": {
+          "package_name": "com.caleb.smart"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "610052229774-9fp6gj35sdak0ch4sbecp0ak5qtm6aik.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.caleb.smart",
+            "certificate_hash": "37cd7f55eb67cfea045b36b40a743a3dec87a915"
+          }
+        },
+        {
+          "client_id": "610052229774-3bto62103d6a4i3ghjem18ons2r5kes1.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBJesrQcpNg9lr59zZuQxSjhtW9yVH3fAk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "610052229774-3bto62103d6a4i3ghjem18ons2r5kes1.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "610052229774-s4oup0fsoifhbms0v51bdajprluekofc.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.http"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

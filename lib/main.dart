@@ -1,8 +1,57 @@
+import 'dart:convert';
+import 'dart:io';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:http/io_client.dart';
 import 'package:my_http_project/login.dart';
+
+/// Address of the bridge (bridge/bridge.py), for example
+/// https://192.168.1.20:5000. The app never talks to the devices directly.
+/// Set it when building: flutter run --dart-define=BRIDGE_URL=https://...
+const String bridgeUrl = String.fromEnvironment('BRIDGE_URL');
+
+/// The bridge's self-signed certificate (the PEM file), base64-encoded.
+/// When set, the app trusts only this certificate for the bridge.
+/// Set it when building: --dart-define=BRIDGE_CERT_B64=...
+const String bridgeCertificateBase64 = String.fromEnvironment('BRIDGE_CERT_B64');
+
+http.Client _createBridgeClient() {
+  if (bridgeCertificateBase64.isEmpty) {
+    // Falls back to the system's trusted certificate authorities
+    return http.Client();
+  }
+  final context = SecurityContext(withTrustedRoots: false)
+    ..setTrustedCertificatesBytes(base64Decode(bridgeCertificateBase64));
+  return IOClient(HttpClient(context: context));
+}
+
+final http.Client bridgeClient = _createBridgeClient();
+
+/// Sends a command to the bridge over HTTPS with the signed-in user's
+/// Firebase ID token. Returns true if the device accepted it.
+Future<bool> sendBridgeCommand(String path, Map<String, String> body) async {
+  final uri = Uri.tryParse('$bridgeUrl/$path');
+  if (uri == null || uri.scheme != 'https') {
+    print('BRIDGE_URL must be an https:// address');
+    return false;
+  }
+  final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+  if (token == null) {
+    return false;
+  }
+  try {
+    final response = await bridgeClient
+        .post(uri, headers: {'Authorization': 'Bearer $token'}, body: body)
+        .timeout(const Duration(seconds: 10));
+    return response.statusCode == 200;
+  } catch (e) {
+    print('Bridge request failed: ${e.runtimeType}');
+    return false;
+  }
+}
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -45,78 +94,62 @@ class _ControlDevicePageState extends State<ControlDevicePage> {
     'lawn sprinkler': false,
   };
 
+  void _showDeviceError() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Could not reach the device. Check that the bridge is running.'),
+      ),
+    );
+  }
+
   Future<void> toggleDevice(String deviceId, bool state) async {
-    final Map<String, String> deviceUrls = {
-      'lamp': 'http://192.168.234.167:8765/toggleDevice',
-      'garage door': 'http://192.168.234.167:8766/toggleDevice',
-      'door': 'http://192.168.234.167:8767/toggleDevice',
-      'window': 'http://192.168.234.167:8768/toggleDevice',
-      'fan': 'http://192.168.234.167:8769/toggleDevice',
-      'thermostat': 'http://192.168.234.167:8770/toggleDevice',
-      'air conditioning': 'http://192.168.234.167:8771/toggleDevice',
-      'lawn sprinkler': 'http://192.168.234.167:8772/toggleDevice',
-    };
-
-    final url = deviceUrls[deviceId];
-    if (url != null) {
-      final response = await http.post(
-        Uri.parse(url),
-        body: {
-          'deviceId': deviceId,
-          'state': state ? '1' : '0',
-        },
-      );
-
-      if (response.statusCode == 200) {
-        setState(() {
-          deviceStates[deviceId] = state;
-        });
-        print('Device toggled successfully');
-      } else {
-        print('Failed to toggle device: ${response.body}');
-      }
+    final ok = await sendBridgeCommand('toggleDevice', {
+      'deviceId': deviceId,
+      'state': state ? '1' : '0',
+    });
+    if (!mounted) return;
+    if (ok) {
+      setState(() {
+        deviceStates[deviceId] = state;
+      });
     } else {
-      print('Invalid device ID');
+      _showDeviceError();
     }
   }
 
   Future<void> setThermostatTemperature(double temperature) async {
-    const url = 'http://192.168.234.167:8770/setTemperature';
-    final response = await http.post(
-      Uri.parse(url),
-      body: {
-        'deviceId': 'thermostat',
-        'temperature': temperature.toString(),
-      },
-    );
-
-    if (response.statusCode == 200) {
-      print('Thermostat temperature set to: $temperature°C');
-    } else {
-      print('Failed to set thermostat temperature: ${response.body}');
+    final ok = await sendBridgeCommand('setTemperature', {
+      'deviceId': 'thermostat',
+      'temperature': temperature.toString(),
+    });
+    if (!ok) {
+      _showDeviceError();
     }
   }
 
   Future<void> toggleFan(int state) async {
-    const String deviceId = 'fan';
-    const String url = 'http://192.168.234.167:8769/toggleDevice';
-
-    final response = await http.post(
-      Uri.parse(url),
-      body: {
-        'deviceId': deviceId,
-        'state': state.toString(),
-      },
-    );
-
-    if (response.statusCode == 200) {
+    final ok = await sendBridgeCommand('toggleDevice', {
+      'deviceId': 'fan',
+      'state': state.toString(),
+    });
+    if (!mounted) return;
+    if (ok) {
       setState(() {
-        deviceStates[deviceId] = state;
+        deviceStates['fan'] = state;
       });
-      print('Fan toggled successfully');
     } else {
-      print('Failed to toggle fan: ${response.body}');
+      _showDeviceError();
     }
+  }
+
+  Future<void> _logout() async {
+    await FirebaseAuth.instance.signOut();
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (context) => const LoginPage()),
+      (route) => false,
+    );
   }
 
   @override
@@ -124,6 +157,13 @@ class _ControlDevicePageState extends State<ControlDevicePage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Control IoT Devices'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Log out',
+            onPressed: _logout,
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         scrollDirection: Axis.vertical,

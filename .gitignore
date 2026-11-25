@@ -41,3 +41,11 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Bridge: local config and secrets (never commit these)
+bridge/devices.json
+bridge/*.pem
+*-firebase-adminsdk-*.json
+service-account*.json
+__pycache__/
+.pytest_cache/

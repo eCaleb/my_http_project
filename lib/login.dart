@@ -1,4 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:my_http_project/main.dart';
@@ -45,19 +44,13 @@ class _LoginPageState extends State<LoginPage> {
 
       User? user = userCredential.user;
       if (user != null && user.emailVerified) {
-        // Retrieve user data from Firestore
-        final firestore = FirebaseFirestore.instance;
-        final userDataDoc = await firestore.collection('users').doc(user.uid).get();
-        final userData = userDataDoc.data();
-
-        // Print the user data to the console
-        print('User Data: $userData');
-
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => const ControlDevicePage()),
         );
       } else if (user != null && !user.emailVerified) {
+        // Don't leave an unverified account signed in
+        await FirebaseAuth.instance.signOut();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Please verify your email before logging in.')),
         );
@@ -66,12 +59,24 @@ class _LoginPageState extends State<LoginPage> {
           const SnackBar(content: Text('Login failed')),
         );
       }
+    } on FirebaseAuthException catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+      // One message for a wrong email or a wrong password, so the screen
+      // doesn't reveal which emails have accounts
+      final message = e.code == 'too-many-requests'
+          ? 'Too many attempts. Try again later.'
+          : 'Incorrect email or password.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
     } catch (e) {
       setState(() {
         _isLoading = false;
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Login failed: $e')),
+        const SnackBar(content: Text('Login failed. Please try again.')),
       );
     } finally {
       setState(() {

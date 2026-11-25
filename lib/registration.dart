@@ -1,7 +1,4 @@
-import 'dart:convert';
-import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 class RegistrationPage extends StatefulWidget {
@@ -52,17 +49,8 @@ class _RegistrationPageState extends State<RegistrationPage> {
       User? user = userCredential.user;
       if (user != null) {
         await user.sendEmailVerification();
-
-        // Hash the password
-        final bytes = utf8.encode(_passwordController.text);
-        final digest = sha256.convert(bytes);
-
-        // Store user data in Firestore
-        final firestore = FirebaseFirestore.instance;
-        await firestore.collection('users').doc(user.uid).set({
-          'email': _emailController.text,
-          'password': digest.toString(), // Store the hashed password
-        });
+        // Firebase Auth stores the password securely, so the app keeps no
+        // copy or hash of it anywhere
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Verification email sent. Please check your email.')),
@@ -76,8 +64,11 @@ class _RegistrationPageState extends State<RegistrationPage> {
       setState(() {
         _isLoading = false;
       });
+      final message = e is FirebaseAuthException && e.code == 'weak-password'
+          ? 'Please choose a stronger password.'
+          : 'Registration failed. Please try again.';
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Registration failed: $e')),
+        SnackBar(content: Text(message)),
       );
     }
   }
